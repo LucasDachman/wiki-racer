@@ -6,7 +6,7 @@ import "fmt"
 func main() {
 	wiki := NewWikiService()
 	title := wiki.RandomPageTitle()
-	links := wiki.ListLinks(title)
+	links := wiki.ListLinks(title, "")
 	fmt.Println(title)
 	fmt.Println(links)
 }

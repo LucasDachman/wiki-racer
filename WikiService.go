@@ -28,6 +28,10 @@ type QueryLinksResponseBody struct {
 			} `json:"Links"`
 		} `json:"pages"`
 	} `json:"query"`
+	Continue struct {
+		Plcontinue string `json:"plcontinue"`
+		Continue   string `json:"continue"`
+	} `json:"continue"`
 }
 
 func NewWikiService() *WikiService {
@@ -63,7 +67,7 @@ func (service *WikiService) RandomPageTitle() string {
 }
 
 // https://en.wikipedia.org/w/api.php?action=query&titles=Albert%20Einstein&prop=links
-func (service WikiService) ListLinks(title string) []string {
+func (service WikiService) ListLinks(title string, plcontinue string) []string {
 	myUrl, err := url.Parse(service.actionBase)
 	if err != nil {
 		panic(`Cannot parse action base`)
@@ -73,6 +77,9 @@ func (service WikiService) ListLinks(title string) []string {
 	q.Add("action", "query")
 	q.Add("prop", "links")
 	q.Add("titles", title)
+	if plcontinue != "" {
+		q.Add("plcontinue", plcontinue)
+	}
 	myUrl.RawQuery = q.Encode()
 
 	resp, err := service.http.Get(myUrl.String())
@@ -100,6 +107,11 @@ func (service WikiService) ListLinks(title string) []string {
 		for _, link := range page.Links {
 			links = append(links, link.Title)
 		}
+	}
+
+	if jsonBody.Continue.Plcontinue != "" {
+		moreLinks := service.ListLinks(title, jsonBody.Continue.Plcontinue)
+		links = append(links, moreLinks...)
 	}
 
 	return links
