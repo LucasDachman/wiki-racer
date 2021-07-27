@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 )
 
 type WikiService struct {
-	http     *http.Client
-	restBase string
+	http       *http.Client
+	actionBase string
+	restBase   string
 }
 
 type RandomPageTitleResponseBody struct {
@@ -17,15 +19,23 @@ type RandomPageTitleResponseBody struct {
 	} `json:"items"`
 }
 
-func NewWikiService() *WikiService {
-	return &WikiService{
-		http:     &http.Client{},
-		restBase: `https://en.wikipedia.org/api/rest_v1`,
-	}
+type QueryLinksResponseBody struct {
+	Query struct {
+		Pages map[string]struct {
+			Title string `json:"title"`
+			Links []struct {
+				Title string `json:"title"`
+			} `json:"Links"`
+		} `json:"pages"`
+	} `json:"query"`
 }
 
-func (service *WikiService) GetCoolName() string {
-	return "Lucas"
+func NewWikiService() *WikiService {
+	return &WikiService{
+		http:       &http.Client{},
+		restBase:   `https://en.wikipedia.org/api/rest_v1`,
+		actionBase: `https://en.wikipedia.org/w/api.php`,
+	}
 }
 
 //curl -X GET "https://en.wikipedia.org/api/rest_v1/page/random/title" -H  "accept: application/problem+json"
@@ -50,4 +60,47 @@ func (service *WikiService) RandomPageTitle() string {
 		panic(`No items found in response`)
 	}
 	return jsonBody.Items[0].Title
+}
+
+// https://en.wikipedia.org/w/api.php?action=query&titles=Albert%20Einstein&prop=links
+func (service WikiService) ListLinks(title string) []string {
+	myUrl, err := url.Parse(service.actionBase)
+	if err != nil {
+		panic(`Cannot parse action base`)
+	}
+	q := myUrl.Query()
+	q.Add("format", "json")
+	q.Add("action", "query")
+	q.Add("prop", "links")
+	q.Add("titles", title)
+	myUrl.RawQuery = q.Encode()
+
+	resp, err := service.http.Get(myUrl.String())
+	if err != nil {
+		panic(`Error fetching title links`)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(`Error reading links body`)
+	}
+
+	// fmt.Println(string(body))
+	var jsonBody QueryLinksResponseBody
+	err = json.Unmarshal(body, &jsonBody)
+	if err != nil {
+		panic(`Error parsing body to json ` + err.Error())
+	}
+
+	// fmt.Println(jsonBody)
+	links := make([]string, len(jsonBody.Query.Pages))
+
+	// parse response body and aggregate links
+	for _, page := range jsonBody.Query.Pages {
+		for _, link := range page.Links {
+			links = append(links, link.Title)
+		}
+	}
+
+	return links
 }
