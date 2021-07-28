@@ -19,13 +19,19 @@ func main() {
 	// wiki.ListLinks("Albert_Einstein", WikiContinue{})
 	// fmt.Println(links, err)
 
-	title1, title2 := "Albert_Einstein", "Molecule"
+	title1, title2 := "Albert_Einstein", "General_relativity"
 	race(title1, title2)
 	// fmt.Println(visited)
 }
 
 type Job struct {
 	op func()
+}
+
+type PathNode struct {
+	name   string
+	parent *PathNode
+	len    int
 }
 
 func worker(id int, jobs <-chan Job) {
@@ -38,9 +44,9 @@ func worker(id int, jobs <-chan Job) {
 	}
 }
 
-func crawl(title1, title2 string, jobs chan<- Job, done chan<- bool) {
-	fmt.Printf("Visiting %v\n", title1)
-	links, err := wiki.ListLinks(title1, WikiContinue{})
+func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode) {
+	fmt.Printf("Visiting %v\n", node.name)
+	links, err := wiki.ListLinks(node.name, WikiContinue{})
 	// fmt.Printf("Finished %v\n", title1)
 	// fmt.Printf("Found %v\n", links)
 	if err != nil {
@@ -54,9 +60,9 @@ func crawl(title1, title2 string, jobs chan<- Job, done chan<- bool) {
 			fmt.Printf("Found empty string\n")
 			continue
 		}
-		if nestedLink == title2 {
-			fmt.Printf("Found %v on %v\n", title2, title1)
-			done <- true
+		if nestedLink == match {
+			fmt.Printf("Found %v on %v\n", match, node.name)
+			done <- &PathNode{name: nestedLink, parent: node, len: node.parent.len + 1}
 			return
 		}
 		if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
@@ -64,7 +70,8 @@ func crawl(title1, title2 string, jobs chan<- Job, done chan<- bool) {
 			newTitle := nestedLink
 			go (func() {
 				jobs <- Job{func() {
-					crawl(newTitle, title2, jobs, done)
+					newNode := &PathNode{name: newTitle, parent: node, len: node.len + 1}
+					crawl(newNode, match, jobs, done)
 				}}
 			})()
 		}
@@ -79,7 +86,7 @@ const MaxJobs = 1
 
 func race(title1, title2 string) {
 	jobs := make(chan Job, MaxJobs)
-	done := make(chan bool)
+	done := make(chan *PathNode)
 
 	for i := 0; i < MaxJobs; i++ {
 		go worker(i, jobs)
@@ -87,10 +94,17 @@ func race(title1, title2 string) {
 
 	jobs <- Job{func() {
 		visited.Store(title1, true)
-		crawl(title1, title2, jobs, done)
-		// fmt.Println("Executing initial job")
-		// done <- true
+		crawl(&PathNode{name: title1, len: 1, parent: &PathNode{}}, title2, jobs, done)
 	}}
 
-	<-done
+	lastNode := <-done
+	printPath(lastNode)
+}
+
+func printPath(node *PathNode) {
+	ptr := node
+	for ptr != nil {
+		defer fmt.Print(ptr.name + " -> ")
+		ptr = ptr.parent
+	}
 }
