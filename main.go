@@ -16,7 +16,10 @@ func main() {
 
 	// fmt.Printf("Title1: %v, Title2: %v\n", title1, title2)
 
-	title1, title2 := "Albert_Einstein", "General_relativity"
+	// wiki.ListLinks("Albert_Einstein", WikiContinue{})
+	// fmt.Println(links, err)
+
+	title1, title2 := "Albert_Einstein", "Molecule"
 	race(title1, title2)
 	// fmt.Println(visited)
 }
@@ -26,48 +29,68 @@ type Job struct {
 }
 
 func worker(id int, jobs <-chan Job) {
+	var jobNum = 0
 	for job := range jobs {
+		jobNum++
+		// fmt.Println("Starting Job: ", jobNum)
 		job.op()
+		// fmt.Println("Finished Job: ", jobNum)
 	}
 }
 
-func crawl(title1, title2 string, jobs chan<- Job) {
+func crawl(title1, title2 string, jobs chan<- Job, done chan<- bool) {
 	fmt.Printf("Visiting %v\n", title1)
-	links, err := wiki.ListLinks(title1, "")
-	fmt.Printf("Finished %v\n", title1)
+	links, err := wiki.ListLinks(title1, WikiContinue{})
+	// fmt.Printf("Finished %v\n", title1)
+	// fmt.Printf("Found %v\n", links)
 	if err != nil {
 		panic("Failed visiting title1: " + err.Error())
 		// fmt.Println(err.Error())
 		// return
 	}
 	for _, nestedLink := range links {
+		// fmt.Printf("Inspecting %v\n", nestedLink)
+		if nestedLink == "" {
+			fmt.Printf("Found empty string\n")
+			continue
+		}
 		if nestedLink == title2 {
-			fmt.Printf("Found on %v\n", title1)
-			close(jobs)
+			fmt.Printf("Found %v on %v\n", title2, title1)
+			done <- true
 			return
 		}
 		if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
+			// fmt.Printf("Creating new job for %v\n", nestedLink)
 			newTitle := nestedLink
-			op := func() {
-				crawl(newTitle, title2, jobs)
-			}
-			newJob := Job{op}
-			jobs <- newJob
+			go (func() {
+				jobs <- Job{func() {
+					crawl(newTitle, title2, jobs, done)
+				}}
+			})()
 		}
+		// else {
+		// 	// fmt.Printf("Found visited link %v\n", nestedLink)
+		// }
 	}
+	// fmt.Println("End of crawl function")
 }
 
-const MaxJobs = 4
+const MaxJobs = 1
 
 func race(title1, title2 string) {
-	jobs := make(chan Job, 2)
+	jobs := make(chan Job, MaxJobs)
+	done := make(chan bool)
+
+	for i := 0; i < MaxJobs; i++ {
+		go worker(i, jobs)
+	}
 
 	jobs <- Job{func() {
 		visited.Store(title1, true)
-		crawl(title1, title2, jobs)
+		crawl(title1, title2, jobs, done)
+		// fmt.Println("Executing initial job")
+		// done <- true
 	}}
 
-	for i := 0; i < MaxJobs; i++ {
-		worker(i, jobs)
-	}
+	<-done
 }

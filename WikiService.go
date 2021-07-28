@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-
-	"github.com/cenkalti/backoff"
 )
 
 type WikiService struct {
@@ -30,17 +28,19 @@ type QueryLinksResponseBody struct {
 			CanonicalUrl string `json:"canonicalUrl"`
 		} `json:"pages"`
 	} `json:"query"`
-	Continue struct {
-		Plcontinue string `json:"plcontinue"`
-		Continue   string `json:"continue"`
-	} `json:"continue"`
+	Continue WikiContinue `json:"continue"`
+}
+
+type WikiContinue struct {
+	Gplcontinue string `json:"gplcontinue"`
+	Continue    string `json:"continue"`
 }
 
 func NewWikiService() *WikiService {
 	return &WikiService{
 		http:       &http.Client{},
-		restBase:   `http://en.wikipedia.org/api/rest_v1`,
-		actionBase: `http://en.wikipedia.org/w/api.php`,
+		restBase:   `https://en.wikipedia.org/api/rest_v1`,
+		actionBase: `https://en.wikipedia.org/w/api.php`,
 	}
 }
 
@@ -66,7 +66,7 @@ func (service *WikiService) RandomPageTitle() string {
 }
 
 // https://en.wikipedia.org/w/api.php?action=query&titles=Albert%20Einstein&prop=links
-func (service WikiService) ListLinks(title string, plcontinue string) ([]string, error) {
+func (service WikiService) ListLinks(title string, cont WikiContinue) ([]string, error) {
 	myUrl, err := url.Parse(service.actionBase)
 	if err != nil {
 		panic(`Cannot parse action base`)
@@ -79,29 +79,23 @@ func (service WikiService) ListLinks(title string, plcontinue string) ([]string,
 	q.Add("redirects", "")
 	q.Add("prop", "info")
 	q.Add("inprop", "url")
+	q.Add("gpllimit", "max")
 
-	if plcontinue != "" {
-		q.Add("plcontinue", plcontinue)
+	if cont.Continue != "" {
+		q.Add("gplcontinue", cont.Gplcontinue)
+		q.Add("continue", cont.Continue)
 	}
 	myUrl.RawQuery = q.Encode()
 
-	var resp *http.Response
-	operation := func() error {
-		req, _err := http.NewRequest(http.MethodGet, myUrl.String(), nil)
-		if _err != nil {
-			return _err
-		}
-		req.Header.Set("Accept", "application/json")
-
-		_resp, _err := service.http.Do(req)
-		if _err != nil {
-			return _err
-		} else {
-			resp = _resp
-			return nil
-		}
+	req, err := http.NewRequest(http.MethodGet, myUrl.String(), nil)
+	if err != nil {
+		return nil, err
 	}
-	err = backoff.Retry(operation, backoff.NewExponentialBackOff())
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Go-Wiki-Race/0.0.1 (lucas.dachman@gmail.com)")
+
+	resp, err := service.http.Do(req)
+
 	if err != nil {
 		return nil, err
 	}
@@ -124,14 +118,16 @@ func (service WikiService) ListLinks(title string, plcontinue string) ([]string,
 	links := make([]string, len(jsonBody.Query.Pages))
 
 	// parse response body and aggregate links
+	i := 0
 	for _, page := range jsonBody.Query.Pages {
 		reg := regexp.MustCompile(`\/wiki\/`)
 		url := reg.Split(page.CanonicalUrl, 2)[1]
-		links = append(links, url)
+		links[i] = url
+		i++
 	}
 
-	if jsonBody.Continue.Plcontinue != "" {
-		moreLinks, err := service.ListLinks(title, jsonBody.Continue.Plcontinue)
+	if jsonBody.Continue.Continue != "" {
+		moreLinks, err := service.ListLinks(title, jsonBody.Continue)
 		if err != nil {
 			return nil, err
 		}
