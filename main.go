@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
 )
 
@@ -11,17 +12,21 @@ var wiki *WikiService
 func main() {
 	wiki = NewWikiService()
 
-	// title1 := wiki.RandomPageTitle()
-	// title2 := wiki.RandomPageTitle()
+	var title1, title2 string
+	if len(os.Args) == 1 {
+		title1 = wiki.RandomPageTitle()
+		title2 = wiki.RandomPageTitle()
+	}
+	if len(os.Args) == 2 {
+		title1 = wiki.RandomPageTitle()
+		title2 = os.Args[1]
+	}
+	if len(os.Args) == 3 {
+		title1, title2 = os.Args[1], os.Args[2]
+	}
 
-	// fmt.Printf("Title1: %v, Title2: %v\n", title1, title2)
-
-	// wiki.ListLinks("Albert_Einstein", WikiContinue{})
-	// fmt.Println(links, err)
-
-	title1, title2 := "Albert_Einstein", "General_relativity"
+	fmt.Printf("Starting on: %v, looking for: %v\n", title1, title2)
 	race(title1, title2)
-	// fmt.Println(visited)
 }
 
 type Job struct {
@@ -32,6 +37,14 @@ type PathNode struct {
 	name   string
 	parent *PathNode
 	len    int
+}
+
+func (node *PathNode) New(name string) *PathNode {
+	return &PathNode{
+		name:   name,
+		parent: node,
+		len:    node.len + 1,
+	}
 }
 
 func worker(id int, jobs <-chan Job) {
@@ -62,7 +75,7 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 		}
 		if nestedLink == match {
 			fmt.Printf("Found %v on %v\n", match, node.name)
-			done <- &PathNode{name: nestedLink, parent: node, len: node.parent.len + 1}
+			done <- node.New(nestedLink)
 			return
 		}
 		if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
@@ -70,8 +83,7 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 			newTitle := nestedLink
 			go (func() {
 				jobs <- Job{func() {
-					newNode := &PathNode{name: newTitle, parent: node, len: node.len + 1}
-					crawl(newNode, match, jobs, done)
+					crawl(node.New(newTitle), match, jobs, done)
 				}}
 			})()
 		}
@@ -82,7 +94,7 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 	// fmt.Println("End of crawl function")
 }
 
-const MaxJobs = 1
+const MaxJobs = 4
 
 func race(title1, title2 string) {
 	jobs := make(chan Job, MaxJobs)
@@ -94,7 +106,9 @@ func race(title1, title2 string) {
 
 	jobs <- Job{func() {
 		visited.Store(title1, true)
-		crawl(&PathNode{name: title1, len: 1, parent: &PathNode{}}, title2, jobs, done)
+		parent := &PathNode{}
+		next := parent.New(title1)
+		crawl(next, title2, jobs, done)
 	}}
 
 	lastNode := <-done
@@ -103,6 +117,7 @@ func race(title1, title2 string) {
 
 func printPath(node *PathNode) {
 	ptr := node
+	defer fmt.Printf("Found in %v visits\n", node.len)
 	for ptr != nil {
 		defer fmt.Print(ptr.name + " -> ")
 		ptr = ptr.parent
