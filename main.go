@@ -21,16 +21,30 @@ func main() {
 }
 
 func race(title1, title2 string) {
-	fmt.Printf("Visiting %v\n", title1)
-	links := wiki.ListLinks(title1, "")
-	fmt.Printf("Got links for %v\n", title1)
-	for _, link := range links {
-		if link == title2 {
-			fmt.Printf("Found on %v\n", title1)
-			return
-		}
-		if _, ok := visited.LoadOrStore(link, true); !ok {
-			race(link, title2)
-		}
+	c := make(chan string, 2)
+	visited.Store(title1, true)
+	c <- title1
+	for link := range c {
+		link := link
+		go (func() {
+			fmt.Printf("Visiting %v\n", link)
+			links, err := wiki.ListLinks(link, "")
+			fmt.Printf("Finished %v\n", link)
+			if err != nil {
+				panic("Failed visiting link: " + err.Error())
+				// fmt.Println(err.Error())
+				// return
+			}
+			for _, nestedLink := range links {
+				if nestedLink == title2 {
+					fmt.Printf("Found on %v\n", link)
+					close(c)
+					return
+				}
+				if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
+					c <- nestedLink
+				}
+			}
+		})()
 	}
 }
