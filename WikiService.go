@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -121,7 +122,12 @@ func (service WikiService) ListLinks(title string, cont WikiContinue) ([]string,
 	i := 0
 	for _, page := range jsonBody.Query.Pages {
 		reg := regexp.MustCompile(`\/wiki\/`)
-		url := reg.Split(page.CanonicalUrl, 2)[1]
+		parts := reg.Split(page.CanonicalUrl, 2)
+		if len(parts) != 2 {
+			log.Println("Found invalid url: ", page.CanonicalUrl)
+			continue
+		}
+		url := parts[1]
 		links[i] = url
 		i++
 	}

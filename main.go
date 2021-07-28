@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sync"
 )
@@ -12,6 +13,13 @@ var visited sync.Map
 var wiki *WikiService
 
 func main() {
+	f, err := os.OpenFile("log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
+
 	wiki = NewWikiService()
 
 	var title1, title2 string
@@ -28,6 +36,7 @@ func main() {
 	}
 
 	fmt.Printf("Starting on: %v, looking for: %v\n", title1, title2)
+	log.Printf("Starting on: %v, looking for: %v\n", title1, title2)
 	race(title1, title2)
 }
 
@@ -115,9 +124,16 @@ func race(title1, title2 string) {
 
 func printPath(node *PathNode) {
 	ptr := node
-	defer fmt.Printf("Found in %v visits\n", node.len)
+	var str string
 	for ptr != nil {
-		defer fmt.Print(ptr.name + " -> ")
+		if ptr.name != "" {
+			if ptr != node {
+				str = " -> " + str
+			}
+			str = ptr.name + str
+		}
 		ptr = ptr.parent
 	}
+	fmt.Println(str)
+	fmt.Printf("Found in %v visits\n", node.len)
 }
