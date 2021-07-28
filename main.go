@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+const MaxJobs = 4
+
 var visited sync.Map
 var wiki *WikiService
 
@@ -64,8 +66,6 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 	// fmt.Printf("Found %v\n", links)
 	if err != nil {
 		panic("Failed visiting title1: " + err.Error())
-		// fmt.Println(err.Error())
-		// return
 	}
 	for _, nestedLink := range links {
 		// fmt.Printf("Inspecting %v\n", nestedLink)
@@ -93,8 +93,6 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 	}
 	// fmt.Println("End of crawl function")
 }
-
-const MaxJobs = 4
 
 func race(title1, title2 string) {
 	jobs := make(chan Job, MaxJobs)
