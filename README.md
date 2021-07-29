@@ -4,6 +4,8 @@ A [Wikirace](https://en.wikipedia.org/wiki/Wikipedia:Wikirace) is a race using l
 
 ## Usage
 
+_Article names must be exact and in canonical format. e.g. Albert\_Einstein_
+
 ```
 go run . [start-page] [end-page]
 ```
