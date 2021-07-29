@@ -4,19 +4,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 )
 
-const Num_Workers = 8
+var Num_Workers = 8
 
 var wiki *WikiService
+
+func init() {
+	if val, ok := os.LookupEnv("wiki_race_workers"); ok {
+		num, err := strconv.Atoi(val)
+		if err == nil {
+			Num_Workers = num
+		} else {
+			panic("Cannot convert wiki_race_workers to int: " + err.Error())
+		}
+	}
+}
 
 func main() {
 
 	closeLogger := setupLogger()
 	defer closeLogger()
-
-	log.Println("Workers", Num_Workers)
 
 	wiki = NewWikiService()
 
@@ -35,6 +45,7 @@ func main() {
 
 	fmt.Printf("Starting on: %v, looking for: %v\n", title1, title2)
 	log.Printf("Starting on: %v, looking for: %v\n", title1, title2)
+	log.Println("Workers", Num_Workers)
 
 	start := time.Now()
 
