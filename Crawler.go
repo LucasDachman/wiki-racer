@@ -61,7 +61,7 @@ func crawl(crawler *Crawler, node *PathNode) {
 	for _, nestedLink := range links {
 		// fmt.Printf("Inspecting %v\n", nestedLink)
 		if nestedLink == "" {
-			fmt.Printf("Found empty string\n")
+			log.Println("Found empty string")
 			continue
 		}
 		if nestedLink == crawler.match {
