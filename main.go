@@ -71,7 +71,7 @@ func (node *PathNode) New(name string) *PathNode {
 	}
 }
 
-func crawl(node *PathNode, match string, pool WorkPool, result chan<- *PathNode) {
+func crawl(node *PathNode, match string, pool *WorkPool, result chan<- *PathNode) {
 	fmt.Printf("Visiting %v\n", node.name)
 	links, err := wiki.ListLinks(node.name, WikiContinue{})
 	// fmt.Printf("Finished %v\n", title1)
@@ -116,7 +116,7 @@ func race(title1, title2 string) {
 		visited.Store(title1, true)
 		parent := &PathNode{}
 		next := parent.New(title1)
-		crawl(next, title2, pool, result)
+		crawl(next, title2, &pool, result)
 	}})
 
 	lastNode := <-result
