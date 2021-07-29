@@ -57,20 +57,6 @@ func setupLogger() func() error {
 	return f.Close
 }
 
-type PathNode struct {
-	name   string
-	parent *PathNode
-	len    int
-}
-
-func (node *PathNode) New(name string) *PathNode {
-	return &PathNode{
-		name:   name,
-		parent: node,
-		len:    node.len + 1,
-	}
-}
-
 func race(title1, title2 string) {
 	pool := NewWorkPool(Num_Workers)
 
