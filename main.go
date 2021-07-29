@@ -61,7 +61,7 @@ func race(title1, title2 string) {
 	pool := NewWorkPool(Num_Workers)
 
 	crawler := NewCrawler(title2, &pool).Start(title1)
-	lastNode := crawler.waitForResult()
+	lastNode := crawler.WaitForResult()
 
 	fmt.Println()
 	printPath(lastNode)

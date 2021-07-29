@@ -35,7 +35,7 @@ func NewCrawler(match string, pool *WorkPool) *Crawler {
 	}
 }
 
-func (crawler *Crawler) waitForResult() *PathNode {
+func (crawler *Crawler) WaitForResult() *PathNode {
 	defer crawler.pool.Stop()
 	return <-crawler.result
 }
