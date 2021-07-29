@@ -8,18 +8,15 @@ import (
 	"time"
 )
 
-const MaxJobs = 8
+const Num_Workers = 8
 
 var visited sync.Map
 var wiki *WikiService
 
 func main() {
-	f, err := os.OpenFile("log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	defer f.Close()
-	log.SetOutput(f)
+
+	closeLogger := setupLogger()
+	defer closeLogger()
 
 	wiki = NewWikiService()
 
@@ -48,8 +45,16 @@ func main() {
 	log.Println("Time: ", duration)
 }
 
-type Job struct {
-	op func()
+func setupLogger() func() error {
+	// Open log file
+	f, err := os.OpenFile("log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Error opening log file: %v", err)
+	}
+	log.SetOutput(f)
+	// log.SetOutput(os.Stdout)
+
+	return f.Close
 }
 
 type PathNode struct {
@@ -66,17 +71,7 @@ func (node *PathNode) New(name string) *PathNode {
 	}
 }
 
-func worker(id int, jobs <-chan Job) {
-	var jobNum = 0
-	for job := range jobs {
-		jobNum++
-		// fmt.Println("Starting Job: ", jobNum)
-		job.op()
-		// fmt.Println("Finished Job: ", jobNum)
-	}
-}
-
-func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode) {
+func crawl(node *PathNode, match string, pool WorkPool, result chan<- *PathNode) {
 	fmt.Printf("Visiting %v\n", node.name)
 	links, err := wiki.ListLinks(node.name, WikiContinue{})
 	// fmt.Printf("Finished %v\n", title1)
@@ -93,17 +88,15 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 		}
 		if nestedLink == match {
 			fmt.Printf("Found %v on %v\n", match, node.name)
-			done <- node.New(nestedLink)
+			result <- node.New(nestedLink)
 			return
 		}
 		if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
 			// fmt.Printf("Creating new job for %v\n", nestedLink)
 			newTitle := nestedLink
-			go (func() {
-				jobs <- Job{func() {
-					crawl(node.New(newTitle), match, jobs, done)
-				}}
-			})()
+			go pool.AddJob(Job{func() {
+				crawl(node.New(newTitle), match, pool, result)
+			}})
 		}
 		// else {
 		// 	// fmt.Printf("Found visited link %v\n", nestedLink)
@@ -113,22 +106,25 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 }
 
 func race(title1, title2 string) {
-	jobs := make(chan Job, MaxJobs)
-	done := make(chan *PathNode)
+	result := make(chan *PathNode)
 
-	for i := 0; i < MaxJobs; i++ {
-		go worker(i, jobs)
-	}
+	pool := NewWorkPool(Num_Workers)
+	pool.Start()
 
-	jobs <- Job{func() {
+	pool.AddJob(Job{func() {
+		// todo clean up
 		visited.Store(title1, true)
 		parent := &PathNode{}
 		next := parent.New(title1)
-		crawl(next, title2, jobs, done)
-	}}
+		crawl(next, title2, pool, result)
+	}})
 
-	lastNode := <-done
+	lastNode := <-result
+	pool.Stop()
+
+	fmt.Println()
 	printPath(lastNode)
+	fmt.Println("Jobs completed: ", pool.jobCounter.num)
 }
 
 func printPath(node *PathNode) {
@@ -143,7 +139,6 @@ func printPath(node *PathNode) {
 		}
 		ptr = ptr.parent
 	}
-	fmt.Println()
 	fmt.Println(str)
 	fmt.Printf("Found in %v visits\n", node.len)
 	log.Println(str)
