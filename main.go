@@ -18,6 +18,8 @@ func main() {
 	closeLogger := setupLogger()
 	defer closeLogger()
 
+	log.Println("Workers", Num_Workers)
+
 	wiki = NewWikiService()
 
 	var title1, title2 string
