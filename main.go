@@ -5,9 +5,10 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
-const MaxJobs = 4
+const MaxJobs = 8
 
 var visited sync.Map
 var wiki *WikiService
@@ -37,7 +38,14 @@ func main() {
 
 	fmt.Printf("Starting on: %v, looking for: %v\n", title1, title2)
 	log.Printf("Starting on: %v, looking for: %v\n", title1, title2)
+
+	start := time.Now()
+
 	race(title1, title2)
+
+	duration := time.Since(start)
+	fmt.Println("Time: ", duration)
+	log.Println("Time: ", duration)
 }
 
 type Job struct {
@@ -74,7 +82,8 @@ func crawl(node *PathNode, match string, jobs chan<- Job, done chan<- *PathNode)
 	// fmt.Printf("Finished %v\n", title1)
 	// fmt.Printf("Found %v\n", links)
 	if err != nil {
-		panic("Failed visiting title1: " + err.Error())
+		log.Println("Failed visiting page: " + node.name + "\n" + err.Error())
+		return
 	}
 	for _, nestedLink := range links {
 		// fmt.Printf("Inspecting %v\n", nestedLink)
@@ -134,6 +143,9 @@ func printPath(node *PathNode) {
 		}
 		ptr = ptr.parent
 	}
+	fmt.Println()
 	fmt.Println(str)
 	fmt.Printf("Found in %v visits\n", node.len)
+	log.Println(str)
+	log.Printf("Found in %v visits\n", node.len)
 }
