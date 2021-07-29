@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
 	"time"
 )
 
 const Num_Workers = 8
 
-var visited sync.Map
 var wiki *WikiService
 
 func main() {
@@ -73,56 +71,11 @@ func (node *PathNode) New(name string) *PathNode {
 	}
 }
 
-func crawl(node *PathNode, match string, pool *WorkPool, result chan<- *PathNode) {
-	fmt.Printf("Visiting %v\n", node.name)
-	links, err := wiki.ListLinks(node.name, WikiContinue{})
-	// fmt.Printf("Finished %v\n", title1)
-	// fmt.Printf("Found %v\n", links)
-	if err != nil {
-		log.Println("Failed visiting page: " + node.name + "\n" + err.Error())
-		return
-	}
-	for _, nestedLink := range links {
-		// fmt.Printf("Inspecting %v\n", nestedLink)
-		if nestedLink == "" {
-			fmt.Printf("Found empty string\n")
-			continue
-		}
-		if nestedLink == match {
-			fmt.Printf("Found %v on %v\n", match, node.name)
-			result <- node.New(nestedLink)
-			return
-		}
-		if _, loaded := visited.LoadOrStore(nestedLink, true); !loaded {
-			// fmt.Printf("Creating new job for %v\n", nestedLink)
-			newTitle := nestedLink
-			go pool.AddJob(Job{func() {
-				crawl(node.New(newTitle), match, pool, result)
-			}})
-		}
-		// else {
-		// 	// fmt.Printf("Found visited link %v\n", nestedLink)
-		// }
-	}
-	// fmt.Println("End of crawl function")
-}
-
 func race(title1, title2 string) {
-	result := make(chan *PathNode)
-
 	pool := NewWorkPool(Num_Workers)
-	pool.Start()
 
-	pool.AddJob(Job{func() {
-		// todo clean up
-		visited.Store(title1, true)
-		parent := &PathNode{}
-		next := parent.New(title1)
-		crawl(next, title2, &pool, result)
-	}})
-
-	lastNode := <-result
-	pool.Stop()
+	crawler := NewCrawler(title2, &pool).Start(title1)
+	lastNode := crawler.waitForResult()
 
 	fmt.Println()
 	printPath(lastNode)
