@@ -72,10 +72,12 @@ func race(title1, title2 string) {
 	pool := NewWorkPool(Num_Workers)
 
 	crawler := NewCrawler(title2, &pool).Start(title1)
-	lastNode := crawler.WaitForResult()
+	results := crawler.WaitForResult()
 
 	fmt.Println()
-	printPath(lastNode)
+	for _, r := range results {
+		printPath(r)
+	}
 	fmt.Println("Jobs completed: ", pool.jobCounter.num)
 }
 

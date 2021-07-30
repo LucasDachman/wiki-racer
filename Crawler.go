@@ -3,8 +3,23 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"sync"
 )
+
+var Max_Results = 2
+
+func init() {
+	if val, ok := os.LookupEnv("wiki_race_matches"); ok {
+		num, err := strconv.Atoi(val)
+		if err == nil {
+			Max_Results = num
+		} else {
+			panic("Cannot convert wiki_race_matches to int: " + err.Error())
+		}
+	}
+}
 
 type PathNode struct {
 	name   string
@@ -35,9 +50,16 @@ func NewCrawler(match string, pool *WorkPool) *Crawler {
 	}
 }
 
-func (crawler *Crawler) WaitForResult() *PathNode {
+func (crawler *Crawler) WaitForResult() []*PathNode {
 	defer crawler.pool.Stop()
-	return <-crawler.result
+
+	var results = make([]*PathNode, Max_Results)
+	for i := 0; i < Max_Results; i++ {
+		results[i] = <-crawler.result
+		log.Printf("Result %v: %v\n", i+1, results[i])
+	}
+
+	return results
 }
 
 func (crawler *Crawler) Start(title string) *Crawler {
