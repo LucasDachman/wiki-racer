@@ -27,7 +27,15 @@ type PathNode struct {
 	len    int
 }
 
-func (node *PathNode) New(name string) *PathNode {
+func NewPathNode(name string) *PathNode {
+	return &PathNode{
+		name:   name,
+		parent: nil,
+		len:    0,
+	}
+}
+
+func (node *PathNode) Child(name string) *PathNode {
 	return &PathNode{
 		name:   name,
 		parent: node,
@@ -36,10 +44,11 @@ func (node *PathNode) New(name string) *PathNode {
 }
 
 type Crawler struct {
-	match   string
-	pool    *WorkPool
-	result  chan *PathNode
-	visited sync.Map
+	match      string
+	pool       *WorkPool
+	result     chan *PathNode
+	visited    sync.Map
+	maxPathLen SafeNum
 }
 
 func NewCrawler(match string, pool *WorkPool) *Crawler {
@@ -66,13 +75,13 @@ func (crawler *Crawler) Start(title string) *Crawler {
 	crawler.pool.Start()
 	crawler.pool.AddJob(Job{func() {
 		crawler.visited.Store(title, true)
-		crawl(crawler, (&PathNode{}).New(title))
+		crawl(crawler, NewPathNode(title))
 	}})
 	return crawler
 }
 
 func crawl(crawler *Crawler, node *PathNode) {
-	fmt.Printf("Visiting %v\n", node.name)
+	fmt.Printf("Visiting %v, len: %v\n", node.name, node.len)
 	links, err := wiki.ListLinks(node.name, WikiContinue{})
 	// fmt.Printf("Finished %v\n", title1)
 	// fmt.Printf("Found %v\n", links)
@@ -88,14 +97,19 @@ func crawl(crawler *Crawler, node *PathNode) {
 		}
 		if nestedLink == crawler.match {
 			fmt.Printf("Found %v on %v\n", crawler.match, node.name)
-			crawler.result <- node.New(nestedLink)
+			resultNode := node.Child(nestedLink)
+			crawler.maxPathLen.Write(resultNode.len)
+			crawler.result <- resultNode
 			return
+		}
+		if max := crawler.maxPathLen.Read(); max != 0 && node.len > max {
+			continue
 		}
 		if _, loaded := crawler.visited.LoadOrStore(nestedLink, true); !loaded {
 			// fmt.Printf("Creating new job for %v\n", nestedLink)
 			newTitle := nestedLink
 			go crawler.pool.AddJob(Job{func() {
-				crawl(crawler, node.New(newTitle))
+				crawl(crawler, node.Child(newTitle))
 			}})
 		}
 		// else {
